@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Cálculo de IRPF sobre PLR</title>
+  <link rel="icon" href="/favicon.ico"/>
+
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-MH82H4X545"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){ dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-MH82H4X545');
+  </script>
+
+  <style>
+    :root {
+      --bg: #2F75A5; 
+      --container-bg: #40414f;
+      --input-bg: #444654;
+      --text: #e8eaed;
+      --muted: #acb1c0;
+      --accent: #10a37f;
+      --accent-dark: #0d8e68;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', Tahoma, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    header {
+      width: 1200px;
+      height: 330px;
+      margin-top: 1rem;
+      background: url('https://impostoplr.online/plr.png') no-repeat center center;
+      background-size: 42%;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .container {
+      background: var(--container-bg);
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      max-width: 520px;
+      width: 100%;
+      padding: 2rem;
+      margin: 2rem 0;
+    }
+    h1 {
+      margin-bottom: 1rem;
+      font-size: 1.75rem;
+      text-align: center;
+    }
+    .field-group {
+      margin-bottom: 1rem;
+    }
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: var(--muted);
+    }
+    .input {
+      width: 100%;
+      padding: 0.75rem;
+      font-size: 1rem;
+      background: var(--input-bg);
+      border: 1px solid #5a5f77;
+      border-radius: 6px;
+      color: var(--text);
+      transition: border-color 0.2s;
+    }
+    .input:focus {
+      border-color: var(--accent);
+      outline: none;
+    }
+    .buttons {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+    .button {
+      flex: 1;
+      padding: 0.75rem;
+      border: none;
+      border-radius: 6px;
+      font-size: 1rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.2s;
+      color: var(--text);
+      background: var(--accent);
+    }
+    .button:hover {
+      background: var(--accent-dark);
+    }
+    .btn-clear { background: #e67e22; }
+
+    .result {
+      background: #2a2b35;
+      padding: 1.5rem;
+      border-radius: 6px;
+      margin-top: 1rem;
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.75rem;
+      width: 100%;
+    }
+    .result-item {
+      width: 100%;
+      text-align: center;
+      font-size: 1rem;
+    }
+    .plr-highlight {
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: var(--accent);
+    }
+    .details {
+      margin-top: 0.5rem;
+      font-size: 0.95rem;
+      color: var(--muted);
+      width: 100%;
+    }
+    .details span {
+      display: block;
+      margin: 0.25rem 0;
+    }
+
+    @media print {
+      .buttons, label, .input { display: none !important; }
+      body { background: #fff !important; color: #000 !important; }
+      .container { background: #fff !important; box-shadow: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <header></header>
+
+  <div class="container">
+    <h1>Imposto de Renda sobre PLR</h1>
+
+    <div class="field-group">
+      <label for="salary">Salário Bruto Mensal (R$)</label>
+      <input type="text" id="salary" class="input" placeholder="Ex: 11.500,00" autofocus/>
+    </div>
+    <div class="field-group">
+      <label for="plr">Valor da PLR Bruta (R$)</label>
+      <input type="text" id="plr" class="input" placeholder="Ex: 13.000,00"/>
+    </div>
+
+    <div class="buttons">
+      <button class="button btn-calc" id="calculate">Calcular</button>
+      <button class="button btn-clear" id="clear">Limpar</button>
+    </div>
+
+    <div id="output" class="result" style="display:none;"></div>
+    <div id="details" class="details" style="display:none;"></div>
+  </div>
+
+  <script>
+    const tabelaIR = [
+      { max: 6677.55, aliquota: 0,      deduction: 0      },
+      { max: 9922.28, aliquota: 0.075,  deduction: 500.82 },
+      { max: 13167.00, aliquota: 0.15,  deduction: 1244.99 },
+      { max: 16380.38, aliquota: 0.225, deduction: 2232.51 },
+      { max: Infinity, aliquota: 0.275, deduction: 3051.53 }
+    ];
+
+    const fmtCurrency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmtPercent  = new Intl.NumberFormat('pt-BR', { style: 'percent', minimumFractionDigits: 2 });
+
+    function maskInput(el) {
+      el.addEventListener('input', () => {
+        let v = el.value.replace(/\D/g, '').padStart(3,'0');
+        v = (Number(v) / 100).toFixed(2) + '';
+        v = v.replace('.', ',').replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1.');
+        el.value = v;
+      });
+    }
+    maskInput(document.getElementById('salary'));
+    maskInput(document.getElementById('plr'));
+
+    document.getElementById('salary').addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        document.getElementById('plr').focus();
+      }
+    });
+    document.getElementById('plr').addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        calculate();
+      }
+    });
+
+    document.getElementById('calculate').onclick = () => calculate();
+    document.getElementById('clear').onclick = () => {
+      ['salary','plr'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('output').style.display  = 'none';
+      document.getElementById('details').style.display = 'none';
+      document.getElementById('salary').focus();
+    };
+
+    function calculate() {
+      const sal   = parseFloat(document.getElementById('salary').value.replace(/\./g,'').replace(',','.')) || 0;
+      const bruto = parseFloat(document.getElementById('plr').value.replace(/\./g,'').replace(',','.')) || 0;
+      if (sal <= 0 || bruto <= 0) return;
+
+      const faixa      = tabelaIR.find(f => bruto <= f.max);
+      const imposto    = Math.max(bruto * faixa.aliquota - faixa.deduction, 0);
+      const liquido    = bruto - imposto;
+      const multSalary = sal ? (liquido / sal) : 0;
+
+      const output  = document.getElementById('output');
+      output.style.display = 'flex';
+      output.innerHTML = `
+        <div class="result-item"><strong>IR a pagar:</strong> ${fmtCurrency.format(imposto)}</div>
+        <div class="result-item plr-highlight"><strong>PLR Líquida:</strong> ${fmtCurrency.format(liquido)}</div>
+        <div class="result-item"><strong>Equivale a</strong> ${multSalary.toFixed(2)} vezes seu salário bruto</div>
+      `;
+
+      const details = document.getElementById('details');
+      details.style.display = 'block';
+      details.innerHTML = `
+        <span><strong>Base de Cálculo:</strong> ${fmtCurrency.format(bruto)}</span>
+        <span><strong>Alíquota:</strong> ${faixa.aliquota ? fmtPercent.format(faixa.aliquota) : '-'}</span>
+        <span><strong>Parcela a Deduzir:</strong> ${faixa.deduction ? fmtCurrency.format(faixa.deduction) : '-'}</span>
+      `;
+    }
+
+  </script>
+</body>
+</html>
